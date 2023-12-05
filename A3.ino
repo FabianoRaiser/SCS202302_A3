@@ -20,6 +20,8 @@ esp_now_peer_info_t peerInfo;
 
 int i;
 
+SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
+
 // Reponde quando dados enviados
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
@@ -76,11 +78,15 @@ void RecebeDados(const uint8_t *mac, const uint8_t *incomingData, int len)
 
   if (myData.req == "POST")
   {
+    xSemaphoreTake(mutex, portMAX_DELAY);
     insereLetra(); // Se o buffer estiver com espaço livre
+    xSemaphoreGive(mutex);
   }
   else if (myData.req == "GET")
   {
+    xSemaphoreTake(mutex, portMAX_DELAY);
     retiraLetra(); // Se o consumidor solicitar uma letra
+    xSemaphoreGive(mutex);
   }
 
   // Exibe estado buffer
@@ -101,12 +107,12 @@ void insereLetra()
         Serial.print(l);
         break;
       }
-      
     }
   }
-  else {
+  else
+  {
     Serial.println("Sem espaço para armazenar o produto!");
-    }
+  }
 }
 
 void retiraLetra()
@@ -122,14 +128,15 @@ void retiraLetra()
         Serial.println("Produto retirado da posição ");
         Serial.print(k);
         // Função de envio do produto;
+        // enviaProduto();
         break;
       }
     }
   }
-  else {
+  else
+  {
     Serial.println("Estoque Vazio!")
   }
-
 }
 
 void exibeBuffer()
