@@ -1,5 +1,5 @@
-#include <esp_now.h>
-#include <WiFi.h>
+#include <esp_now.h>;
+#include <WiFi.h>;
 
 // Definir endereço da placa comunicadora
 uint8_t broadcastAddress[] = {0xD8, 0xBC, 0x38, 0xE2, 0x48, 0x9C};
@@ -7,14 +7,19 @@ uint8_t broadcastAddress[] = {0xD8, 0xBC, 0x38, 0xE2, 0x48, 0x9C};
 // Buffer de memória
 String buffer[9];
 
-// Difinição do padrão da mensagem recebida
-typedef struct struct_message
-{
-  String req;
-  String S;
-  String R;
-} struct_message;
-struct_message myData;
+// Difinição do padrão da mensagem emitida
+typedef struct {
+  String emissor_Prod;
+  String emissor_Req;
+} dado_emissor;
+
+typedef struct {
+  String recebedor_Prod;
+  String recebedor_Req;
+} dado_recebedor;
+
+dado_emissor dadoE;
+dado_recebedor dadoR;
 
 esp_now_peer_info_t peerInfo;
 
@@ -33,18 +38,8 @@ void setup()
 {
   // Iniciar Monitor  Serial
   Serial.begin(115200);
-  Serial.println();
-  Serial.print("EndereÃ§o MAC placa ESP:     ");
-  Serial.print(WiFi.macAddress());
-  // Configura dispositio como EstaÃ§Ã£o Wi-Fi
-  WiFi.mode(WIFI_STA);
-
-  // Inicia ESP-NOW
-  if (esp_now_init() != ESP_OK)
-  {
-    Serial.println("Erro ao inicializar ESP-NOW");
-    return;
-  }
+  modeStation();
+  InitESPNow();
 
   // recebe status do pacote enviado
   esp_now_register_send_cb(OnDataSent);
@@ -64,28 +59,24 @@ void setup()
 
 void loop()
 {
+  // mensagem de armazenamento concluido
 }
 
 void RecebeDados(const uint8_t *mac, const uint8_t *incomingData, int len)
 {
-  memcpy(&myData, incomingData, sizeof(myData));
-  Serial.print("Byte Recebido:      ");
-  Serial.println(len);
-  Serial.print("Letra S:    ");
-  Serial.println(myData.S);
-  Serial.print("Letra R:     ");
-  Serial.println(myData.R);
+  memcpy(&dadoR, incomingData, sizeof(dadoR));
+  
 
-  if (myData.req == "POST")
+  if (dadoE.emissor_Req == "POST")
   {
     xSemaphoreTake(mutex, portMAX_DELAY);
-    insereLetra(); // Se o buffer estiver com espaço livre
+    insereLetra(dadoE); // Se o buffer estiver com espaço livre
     xSemaphoreGive(mutex);
   }
-  else if (myData.req == "GET")
+  else if (dadoE.emissor_Req == "GET")
   {
     xSemaphoreTake(mutex, portMAX_DELAY);
-    retiraLetra(); // Se o consumidor solicitar uma letra
+    retiraLetra(dadoR, dadoE); // Se o consumidor solicitar uma letra
     xSemaphoreGive(mutex);
   }
 
@@ -93,7 +84,7 @@ void RecebeDados(const uint8_t *mac, const uint8_t *incomingData, int len)
   exibeBuffer();
 }
 
-void insereLetra()
+void insereLetra(void dadoRecebido)
 {
   if (i < 9) // Se houver espaço
   {
@@ -101,9 +92,9 @@ void insereLetra()
     {
       if (buffer[l] == "") // Se posição vazia
       {
-        buffer[l] = myData.R;
+        buffer[l] = dadoRecebido.emissor_Prod;
         i++;
-        Serial.println("Produto armazenado na posição ");
+        Serial.println("Letra armazenada na posição ");
         Serial.print(l);
         break;
       }
@@ -111,24 +102,24 @@ void insereLetra()
   }
   else
   {
-    Serial.println("Sem espaço para armazenar o produto!");
+    Serial.println("Sem espaço para armazenar a letra!");
   }
 }
 
-void retiraLetra()
+void retiraLetra(void *dadoRecebido, void *dadoEnviado)
 {
   if (i != 0)
   {
     for (int k = 0; k < 9; k++)
     {
-      if (buffer[k] == myData.S)
+      if (buffer[k] == dadoRecebido.emissor_Prod)
       {
         buffer[k] = "";
         i--;
         Serial.println("Produto retirado da posição ");
         Serial.print(k);
         // Função de envio do produto;
-        // enviaProduto();
+        enviaResLetra(dadoEnviado);
         break;
       }
     }
@@ -139,6 +130,10 @@ void retiraLetra()
   }
 }
 
+void enviaResLetra(void *dado) {
+  esp_err_t result = esp_now_send(peerMacAddress, (uint8_t *) &dado, sizeof(dado));
+}
+
 void exibeBuffer()
 {
   for (int j = 0; j < 9; j++)
@@ -146,4 +141,20 @@ void exibeBuffer()
     Serial.print("Buffer: ");
     Serial.println(buffer[j]);
   }
+}
+
+void InitESPNow(){
+    if (esp_now_init() == ESP_OK) {
+    Serial.println("ESPNow iniciou com successo");
+  }
+  else {
+    Serial.println("ESPNow falhou na inicializaÃ§Ã£o");
+    ESP.restart();
+  }
+}
+
+void modeStation(){
+  WiFi.mode(WIFI_STA);
+  Serial.print("EndereÃ§o MAC placa ESP:     ");
+  Serial.print(WiFi.macAddress());
 }
