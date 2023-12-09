@@ -70,7 +70,7 @@ void RecebeDados(const uint8_t *mac, const uint8_t *incomingData, int len)
   if (dadoE.emissor_Req == "POST")
   {
     xSemaphoreTake(mutex, portMAX_DELAY);
-    insereLetra(dadoE); // Se o buffer estiver com espaço livre
+    insereLetra(dadoR); // Se o buffer estiver com espaço livre
     xSemaphoreGive(mutex);
   }
   else if (dadoE.emissor_Req == "GET")
@@ -84,7 +84,7 @@ void RecebeDados(const uint8_t *mac, const uint8_t *incomingData, int len)
   exibeBuffer();
 }
 
-void insereLetra(void dadoRecebido)
+void insereLetra(dado_recebedor dado)
 {
   if (i < 9) // Se houver espaço
   {
@@ -92,7 +92,7 @@ void insereLetra(void dadoRecebido)
     {
       if (buffer[l] == "") // Se posição vazia
       {
-        buffer[l] = dadoRecebido.emissor_Prod;
+        buffer[l] = dado.recebedor_Prod;
         i++;
         Serial.println("Letra armazenada na posição ");
         Serial.print(l);
@@ -104,20 +104,21 @@ void insereLetra(void dadoRecebido)
   {
     Serial.println("Sem espaço para armazenar a letra!");
   }
-}
+};
 
-void retiraLetra(void *dadoRecebido, void *dadoEnviado)
+void retiraLetra(dado_recebedor dadoRecebido, dado_emissor dadoEnviado)
 {
   if (i != 0)
   {
     for (int k = 0; k < 9; k++)
     {
-      if (buffer[k] == dadoRecebido.emissor_Prod)
+      if (buffer[k] == dadoRecebido.recebedor_Prod)
       {
         buffer[k] = "";
         i--;
         Serial.println("Produto retirado da posição ");
         Serial.print(k);
+        respostaConsumidor(dadoEnviado, dadoRecebido);
         // Função de envio do produto;
         enviaResLetra(dadoEnviado);
         break;
@@ -126,12 +127,18 @@ void retiraLetra(void *dadoRecebido, void *dadoEnviado)
   }
   else
   {
-    Serial.println("Estoque Vazio!")
+    Serial.println("Estoque Vazio!");
   }
 }
 
-void enviaResLetra(void *dado) {
-  esp_err_t result = esp_now_send(peerMacAddress, (uint8_t *) &dado, sizeof(dado));
+void respostaConsumidor(dado_emissor dadoEnviar, dado_recebedor produtoEstoque ) {
+  dadoEnviar.emissor_Prod = produtoEstoque.recebedor_Prod;
+  Serial.println("Produto alocado na mensagem de envio");
+  dadoEnviar.emissor_Req = "RES";
+}
+
+void enviaResLetra(dado_emissor dado) {
+  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &dado, sizeof(dado));
 }
 
 void exibeBuffer()
